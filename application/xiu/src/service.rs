@@ -145,8 +145,9 @@ impl Service {
 
             let listen_port = rtmp_cfg_value.port;
             let address = format!("0.0.0.0:{listen_port}");
+            let token = rtmp_cfg_value.token.clone();
 
-            let mut rtmp_server = RtmpServer::new(address, producer, gop_num);
+            let mut rtmp_server = RtmpServer::new(address, producer, gop_num, token);
             tokio::spawn(async move {
                 if let Err(err) = rtmp_server.run().await {
                     log::error!("rtmp server error: {}", err);

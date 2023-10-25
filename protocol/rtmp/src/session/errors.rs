@@ -73,6 +73,11 @@ pub enum SessionErrorValue {
 
     #[fail(display = "session is finished.")]
     Finish,
+
+    #[fail(display = "no token.\n")]
+    NoToken,
+    #[fail(display = "forbidden.\n")]
+    Forbidden,
 }
 
 impl From<Amf0WriteError> for SessionError {

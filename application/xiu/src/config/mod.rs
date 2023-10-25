@@ -34,6 +34,7 @@ impl Config {
                 port: rtmp_port,
                 pull: None,
                 push: None,
+                token: None,
             });
         }
 
@@ -96,6 +97,7 @@ pub struct RtmpConfig {
     pub gop_num: Option<usize>,
     pub pull: Option<RtmpPullConfig>,
     pub push: Option<Vec<RtmpPushConfig>>,
+    pub token: Option<String>
 }
 #[derive(Debug, Deserialize, Clone)]
 pub struct RtmpPullConfig {

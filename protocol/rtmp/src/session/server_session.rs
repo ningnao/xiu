@@ -1,11 +1,10 @@
-use crate::chunk::packetizer::ChunkPacketizer;
+use std::collections::HashMap;
 
 use {
-    super::{
-        common::Common,
-        define,
-        define::SessionType,
-        errors::{SessionError, SessionErrorValue},
+    bytes::BytesMut,
+    bytesio::{
+        bytes_writer::AsyncBytesWriter,
+        bytesio::{TcpIO, TNetIO},
     },
     crate::{
         amf0::Amf0ValueType,
@@ -22,26 +21,29 @@ use {
         user_control_messages::writer::EventMessagesWriter,
         utils::RtmpUrlParser,
     },
-    bytes::BytesMut,
-    bytesio::{
-        bytes_writer::AsyncBytesWriter,
-        bytesio::{TNetIO, TcpIO},
-    },
     indexmap::IndexMap,
     std::{sync::Arc, time::Duration},
     streamhub::{
         define::StreamHubEventSender,
         utils::{RandomDigitCount, Uuid},
     },
+    super::{
+        common::Common,
+        define,
+        define::SessionType,
+        errors::{SessionError, SessionErrorValue},
+    },
     tokio::{net::TcpStream, sync::Mutex},
 };
+
+use crate::chunk::packetizer::ChunkPacketizer;
 
 enum ServerSessionState {
     Handshake,
     ReadChunk,
     // OnConnect,
     // OnCreateStream,
-    //Publish,
+    // Publish,
     DeleteStream,
     Play,
 }
@@ -64,10 +66,11 @@ pub struct ServerSession {
     pub common: Common,
     /*configure how many gops will be cached.*/
     gop_num: usize,
+    token: Option<String>,
 }
 
 impl ServerSession {
-    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender, gop_num: usize) -> Self {
+    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender, gop_num: usize, token: Option<String>) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {
             log::info!("server session: {}", addr.to_string());
             Some(addr)
@@ -97,6 +100,7 @@ impl ServerSession {
             has_remaing_data: false,
             connect_properties: ConnectProperties::default(),
             gop_num,
+            token,
         }
     }
 
@@ -247,7 +251,7 @@ impl ServerSession {
                     command_object,
                     others,
                 )
-                .await?
+                    .await?
             }
             RtmpMessageData::SetChunkSize { chunk_size } => {
                 self.on_set_chunk_size(*chunk_size as usize)?;
@@ -701,6 +705,36 @@ impl ServerSession {
             self.stream_name,
             self.url_parameters
         );
+
+        if let Some(server_token) = &self.token {
+            if let Some(params) = Some(&self.url_parameters) {
+                let mut params_map: HashMap<_, _> = HashMap::new();
+                for param in params.split("&") {
+                    let entry: Vec<_> = param.split("=").collect();
+
+                    if entry.len() == 1 {
+                        params_map.insert(entry[0].to_string(), "".to_string());
+                    } else if entry.len() == 2 {
+                        params_map.insert(entry[0].to_string(), entry[1].to_string());
+                    }
+                }
+
+                match params_map.get("token") {
+                    Some(token) => {
+                        if token != server_token {
+                            return Err(SessionError {
+                                value: SessionErrorValue::Forbidden,
+                            });
+                        }
+                    }
+                    None => {
+                        return Err(SessionError {
+                            value: SessionErrorValue::NoToken,
+                        });
+                    }
+                }
+            }
+        }
 
         let mut event_messages = EventMessagesWriter::new(AsyncBytesWriter::new(self.io.clone()));
         event_messages.write_stream_begin(*stream_id).await?;

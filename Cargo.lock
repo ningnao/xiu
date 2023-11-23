@@ -1363,6 +1363,7 @@ version = "0.3.1"
 dependencies = [
  "byteorder",
  "bytes",
+ "chrono",
  "failure",
  "futures",
  "hyper",

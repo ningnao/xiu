@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use chrono::Local;
 use {
     super::httpflv::HttpFlv,
     futures::channel::mpsc::unbounded,
@@ -18,6 +20,7 @@ async fn handle_connection(
     req: Request<Body>,
     event_producer: StreamHubEventSender, // event_producer: ChannelEventProducer
     remote_addr: SocketAddr,
+    need_record: bool,
 ) -> Result<Response<Body>> {
     let path = req.uri().path();
 
@@ -31,6 +34,28 @@ async fn handle_connection(
 
             let (http_response_data_producer, http_response_data_consumer) = unbounded();
 
+            let flv_name = {
+                if let Some(params) = req.uri().query() {
+                    let mut params_map: HashMap<_, _> = HashMap::new();
+
+                    for param in params.split("&") {
+                        let entry: Vec<_> = param.split("=").collect();
+
+                        if entry.len() == 2 {
+                            params_map.insert(entry[0].to_string(), entry[1].to_string());
+                        }
+                    }
+                    params_map.remove("file_name")
+                } else {
+                    None
+                }
+            };
+
+            let flv_name = match flv_name {
+                Some(flv_name) => format!("{}.flv",flv_name),
+                None => format!("{}-{}.flv", stream_name, Local::now().format("%Y-%m-%d-%H-%M-%S").to_string())
+            };
+
             let mut flv_hanlder = HttpFlv::new(
                 app_name,
                 stream_name,
@@ -38,6 +63,8 @@ async fn handle_connection(
                 http_response_data_producer,
                 req.uri().to_string(),
                 remote_addr,
+                flv_name,
+                need_record,
             );
 
             tokio::spawn(async move {
@@ -60,7 +87,7 @@ async fn handle_connection(
     }
 }
 
-pub async fn run(event_producer: StreamHubEventSender, port: usize) -> Result<()> {
+pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
     let sock_addr = listen_address.parse().unwrap();
 
@@ -69,7 +96,7 @@ pub async fn run(event_producer: StreamHubEventSender, port: usize) -> Result<()
         let flv_copy = event_producer.clone();
         async move {
             Ok::<_, GenericError>(service_fn(move |req| {
-                handle_connection(req, flv_copy.clone(), remote_addr)
+                handle_connection(req, flv_copy.clone(), remote_addr, need_record)
             }))
         }
     });

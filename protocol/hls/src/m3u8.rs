@@ -63,7 +63,7 @@ impl M3u8 {
         stream_name: String,
         need_record: bool,
     ) -> Self {
-        let m3u8_folder = format!("./{app_name}/{stream_name}");
+        let m3u8_folder = format!("./{app_name}/hls/{stream_name}");
         fs::create_dir_all(m3u8_folder.clone()).unwrap();
 
         let live_m3u8_name = format!("{stream_name}.m3u8");

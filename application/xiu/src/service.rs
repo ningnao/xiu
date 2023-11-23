@@ -249,9 +249,10 @@ impl Service {
             }
             let port = httpflv_cfg_value.port;
             let event_producer = stream_hub.get_hub_event_sender();
+            let need_record = httpflv_cfg_value.need_record;
 
             tokio::spawn(async move {
-                if let Err(err) = httpflv_server::run(event_producer, port).await {
+                if let Err(err) = httpflv_server::run(event_producer, port, need_record).await {
                     log::error!("httpflv server error: {}", err);
                 }
             });

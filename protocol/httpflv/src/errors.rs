@@ -37,6 +37,8 @@ pub enum HttpFLvErrorValue {
     MetadataError(MetadataError),
     #[fail(display = "tokio mpsc error")]
     MpscSendError(SendError),
+    #[fail(display = "write file error:{}", _0)]
+    IOError(std::io::Error),
 }
 
 impl From<SessionError> for HttpFLvError {
@@ -82,5 +84,13 @@ impl From<MetadataError> for HttpFLvError {
 impl fmt::Display for HttpFLvError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(&self.value, f)
+    }
+}
+
+impl From<std::io::Error> for HttpFLvError {
+    fn from(error: std::io::Error) -> Self {
+        HttpFLvError {
+            value: HttpFLvErrorValue::IOError(error),
+        }
     }
 }

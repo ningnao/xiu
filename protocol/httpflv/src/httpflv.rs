@@ -1,3 +1,6 @@
+use std::fs;
+use std::fs::File;
+use std::io::Write;
 use {
     super::{
         define::{tag_type, HttpResponseDataProducer},
@@ -33,6 +36,10 @@ pub struct HttpFlv {
     subscriber_id: Uuid,
     request_url: String,
     remote_addr: SocketAddr,
+
+    flv_folder: String,
+    flv_name: String,
+    need_record: bool,
 }
 
 impl HttpFlv {
@@ -43,9 +50,16 @@ impl HttpFlv {
         http_response_data_producer: HttpResponseDataProducer,
         request_url: String,
         remote_addr: SocketAddr,
+        flv_name: String,
+        need_record: bool,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
         let subscriber_id = Uuid::new(RandomDigitCount::Four);
+
+        let flv_folder = format!("./{app_name}/flv/{stream_name}");
+        if need_record {
+            fs::create_dir_all(&flv_folder).unwrap();
+        }
 
         Self {
             app_name,
@@ -57,6 +71,9 @@ impl HttpFlv {
             subscriber_id,
             request_url,
             remote_addr,
+            flv_name,
+            flv_folder,
+            need_record,
         }
     }
 
@@ -71,12 +88,19 @@ impl HttpFlv {
         self.muxer.write_flv_header()?;
         self.muxer.write_previous_tag_size(0)?;
 
-        self.flush_response_data()?;
+        let mut file_handler = None;
+        if self.need_record {
+            let file_path = format!("{}/{}", &self.flv_folder, &self.flv_name);
+            file_handler = Some(File::create(file_path).unwrap());
+        }
+
+        self.flush_response_data(&mut file_handler)?;
+
         let mut retry_count = 0;
         //write flv body
         loop {
             if let Some(data) = self.data_consumer.recv().await {
-                if let Err(err) = self.write_flv_tag(data) {
+                if let Err(err) = self.write_flv_tag(data, &mut file_handler) {
                     log::error!("write_flv_tag err: {}", err);
                     retry_count += 1;
                 } else {
@@ -92,7 +116,7 @@ impl HttpFlv {
         self.unsubscribe_from_rtmp_channels().await
     }
 
-    pub fn write_flv_tag(&mut self, channel_data: FrameData) -> Result<(), HttpFLvError> {
+    pub fn write_flv_tag(&mut self, channel_data: FrameData, file_handle: &mut Option<File>) -> Result<(), HttpFLvError> {
         let (common_data, common_timestamp, tag_type) = match channel_data {
             FrameData::Audio { timestamp, data } => (data, timestamp, tag_type::AUDIO),
             FrameData::Video { timestamp, data } => (data, timestamp, tag_type::VIDEO),
@@ -117,13 +141,18 @@ impl HttpFlv {
         self.muxer
             .write_previous_tag_size(common_data_len + HEADER_LENGTH)?;
 
-        self.flush_response_data()?;
+        self.flush_response_data(file_handle)?;
 
         Ok(())
     }
 
-    pub fn flush_response_data(&mut self) -> Result<(), HttpFLvError> {
+    pub fn flush_response_data(&mut self, file_handle: &mut Option<File>) -> Result<(), HttpFLvError> {
         let data = self.muxer.writer.extract_current_bytes();
+
+        if let Some(file_handle) = file_handle {
+            file_handle.write_all(data.as_ref())?;
+        }
+
         self.http_response_data_producer.start_send(Ok(data))?;
 
         Ok(())

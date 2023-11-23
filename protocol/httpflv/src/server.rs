@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-use chrono::Local;
 use {
     super::httpflv::HttpFlv,
     futures::channel::mpsc::unbounded,
@@ -34,36 +32,13 @@ async fn handle_connection(
 
             let (http_response_data_producer, http_response_data_consumer) = unbounded();
 
-            let flv_name = {
-                if let Some(params) = req.uri().query() {
-                    let mut params_map: HashMap<_, _> = HashMap::new();
-
-                    for param in params.split("&") {
-                        let entry: Vec<_> = param.split("=").collect();
-
-                        if entry.len() == 2 {
-                            params_map.insert(entry[0].to_string(), entry[1].to_string());
-                        }
-                    }
-                    params_map.remove("file_name")
-                } else {
-                    None
-                }
-            };
-
-            let flv_name = match flv_name {
-                Some(flv_name) => format!("{}.flv",flv_name),
-                None => format!("{}-{}.flv", stream_name, Local::now().format("%Y-%m-%d-%H-%M-%S").to_string())
-            };
-
             let mut flv_hanlder = HttpFlv::new(
                 app_name,
                 stream_name,
                 event_producer,
                 http_response_data_producer,
-                req.uri().to_string(),
+                req,
                 remote_addr,
-                flv_name,
                 need_record,
             );
 

@@ -11,7 +11,7 @@ pub struct Ts {
 
 impl Ts {
     pub fn new(app_name: String, stream_name: String) -> Self {
-        let live_path = format!("./{app_name}/hls/{stream_name}");
+        let live_path = format!("./{app_name}/{stream_name}/hls");
         fs::create_dir_all(live_path.clone()).unwrap();
 
         Self {

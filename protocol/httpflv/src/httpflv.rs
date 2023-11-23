@@ -62,9 +62,10 @@ impl HttpFlv {
 
             //default value
             let mut flv_name = format!(
-                "{}-{}.flv",
+                "{}-{}-{}.flv",
                 stream_name,
-                Local::now().format("%Y-%m-%d-%H-%M-%S").to_string()
+                Local::now().format("%Y-%m-%d-%H-%M-%S").to_string(),
+                &uuid::Uuid::new_v4().to_string()[..6],
             );
 
             //set flv name specified by user

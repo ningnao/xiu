@@ -128,6 +128,21 @@ impl HttpFlv {
                 break;
             }
         }
+
+        if let Some(file_handler) = &mut self.file_handler {
+            let mut timestamp_bytes = [0u8;3];
+            let timestamp = self.muxer.timestamp_delta;
+            timestamp_bytes[0] = (timestamp >> 16) as u8;
+            timestamp_bytes[1] = (timestamp >> 8) as u8;
+            timestamp_bytes[2] = timestamp as u8;
+
+            let mut end : Vec<u8> = Vec::new();
+            end.extend_from_slice(&[0x09, 0x00, 0x00, 0x05]);
+            end.extend_from_slice(&timestamp_bytes);
+            end.extend_from_slice(&[0x00, 0x00, 0x00, 0x00, 0x17, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10]);
+
+            file_handler.write_all(&end)?;
+        }
         self.unsubscribe_from_rtmp_channels().await
     }
 

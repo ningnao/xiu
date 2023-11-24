@@ -14,6 +14,10 @@ const FLV_HEADER: [u8; 9] = [
 pub const HEADER_LENGTH: u32 = 11;
 pub struct FlvMuxer {
     pub writer: BytesWriter,
+    first_flag: bool,
+    timestamp_start: u32,
+    pub timestamp_delta: u32,
+
 }
 
 impl Default for FlvMuxer {
@@ -26,6 +30,9 @@ impl FlvMuxer {
     pub fn new() -> Self {
         Self {
             writer: BytesWriter::new(),
+            first_flag: true,
+            timestamp_start: 0,
+            timestamp_delta: 0,
         }
     }
 
@@ -40,6 +47,12 @@ impl FlvMuxer {
         data_size: u32,
         timestamp: u32,
     ) -> Result<(), FlvMuxerError> {
+        //save timestamp
+        if self.first_flag && timestamp > 0 {
+            self.timestamp_start = timestamp;
+            self.first_flag = false;
+        }
+        self.timestamp_delta = timestamp - self.timestamp_start;
         //tag type
         self.writer.write_u8(tag_type)?;
         //data size

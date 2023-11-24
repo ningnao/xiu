@@ -61,6 +61,7 @@ impl Config {
                 enabled: true,
                 port: httpflv_port,
                 need_record: false,
+                subscribe_token: None,
             });
         }
 
@@ -132,6 +133,7 @@ pub struct HttpFlvConfig {
     pub port: usize,
     //record or not
     pub need_record: bool,
+    pub subscribe_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

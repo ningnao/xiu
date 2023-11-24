@@ -39,7 +39,10 @@ pub struct HttpFlv {
     request_url: String,
     remote_addr: SocketAddr,
 
+    req: Request<Body>,
+    need_record: bool,
     file_handler: Option<File>,
+    subscribe_token: Option<String>,
 }
 
 impl HttpFlv {
@@ -51,38 +54,10 @@ impl HttpFlv {
         req: Request<Body>,
         remote_addr: SocketAddr,
         need_record: bool,
+        subscribe_token: Option<String>,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
         let subscriber_id = Uuid::new(RandomDigitCount::Four);
-
-        let mut file_handler = None;
-        if need_record {
-            let flv_folder = format!("./{app_name}/{stream_name}/flv");
-            fs::create_dir_all(&flv_folder).unwrap();
-
-            //default value
-            let mut flv_name = format!(
-                "{}-{}-{}.flv",
-                stream_name,
-                Local::now().format("%Y-%m-%d-%H-%M-%S").to_string(),
-                &uuid::Uuid::new_v4().to_string()[..6],
-            );
-
-            //set flv name specified by user
-            if let Some(params) = req.uri().query() {
-                for param in params.split("&") {
-                    let entry: Vec<_> = param.split("=").collect();
-                    if entry.len() == 2 {
-                        if entry[0].to_string() == "file_name".to_string() {
-                            flv_name = format!("{}.flv", entry[1].to_string());
-                        }
-                    }
-                }
-            }
-
-            let file_path = format!("{}/{}", flv_folder, flv_name);
-            file_handler = Some(File::create(file_path).unwrap());
-        }
 
         Self {
             app_name,
@@ -94,11 +69,48 @@ impl HttpFlv {
             subscriber_id,
             request_url: req.uri().to_string(),
             remote_addr,
-            file_handler
+            req,
+            need_record,
+            file_handler: None,
+            subscribe_token,
         }
     }
 
     pub async fn run(&mut self) -> Result<(), HttpFLvError> {
+        let mut token = None;
+        if self.need_record {
+            let flv_folder = format!("./{}/{}/flv", &self.app_name, &self.stream_name);
+            fs::create_dir_all(&flv_folder).unwrap();
+
+            //default value
+            let mut flv_name = format!(
+                "{}-{}-{}.flv",
+                self.stream_name,
+                Local::now().format("%Y-%m-%d-%H-%M-%S").to_string(),
+                &uuid::Uuid::new_v4().to_string()[..6],
+            );
+
+            //set flv name specified by user
+            if let Some(params) = self.req.uri().query() {
+                for param in params.split("&") {
+                    let entry: Vec<_> = param.split("=").collect();
+                    if entry.len() == 2 {
+                        if entry[0].to_string() == "file_name".to_string() {
+                            flv_name = format!("{}.flv", entry[1].to_string());
+                        }
+                        if entry[0].to_string() == "token".to_string() {
+                            token = Some(entry[1].to_string());
+                        }
+                    }
+                }
+            }
+            // validate token
+            validate_token(&self.subscribe_token, &token)?;
+
+            let file_path = format!("{}/{}", flv_folder, flv_name);
+            self.file_handler = Some(File::create(file_path).unwrap());
+        }
+
         self.subscribe_from_rtmp_channels().await?;
         self.send_media_stream().await?;
 
@@ -252,4 +264,25 @@ impl HttpFlv {
 
         Ok(())
     }
+}
+
+fn validate_token(server_token: &Option<String>, token: &Option<String>) -> Result<(), HttpFLvError>{
+    if let Some(server_token) = server_token {
+        match token {
+            Some(token) => {
+                if token.as_str() != server_token {
+                    return Err(HttpFLvError {
+                        value: HttpFLvErrorValue::Forbidden,
+                    });
+                }
+            }
+            None => {
+                return Err(HttpFLvError {
+                    value: HttpFLvErrorValue::NoToken,
+                });
+            }
+        }
+    }
+
+    Ok(())
 }

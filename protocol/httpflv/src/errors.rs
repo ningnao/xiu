@@ -39,6 +39,11 @@ pub enum HttpFLvErrorValue {
     MpscSendError(SendError),
     #[fail(display = "write file error:{}", _0)]
     IOError(std::io::Error),
+
+    #[fail(display = "no token.\n")]
+    NoToken,
+    #[fail(display = "forbidden.\n")]
+    Forbidden,
 }
 
 impl From<SessionError> for HttpFLvError {

@@ -19,6 +19,7 @@ async fn handle_connection(
     event_producer: StreamHubEventSender, // event_producer: ChannelEventProducer
     remote_addr: SocketAddr,
     need_record: bool,
+    subscribe_token: Option<String>,
 ) -> Result<Response<Body>> {
     let path = req.uri().path();
 
@@ -40,11 +41,12 @@ async fn handle_connection(
                 req,
                 remote_addr,
                 need_record,
+                subscribe_token,
             );
 
             tokio::spawn(async move {
                 if let Err(err) = flv_hanlder.run().await {
-                    log::error!("flv handler run error {}", err);
+                    log::error!("flv handler run error: {}", err);
                 }
             });
 
@@ -62,16 +64,17 @@ async fn handle_connection(
     }
 }
 
-pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool) -> Result<()> {
+pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool, subscribe_token: Option<String>) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
     let sock_addr = listen_address.parse().unwrap();
 
     let new_service = make_service_fn(move |socket: &AddrStream| {
         let remote_addr = socket.remote_addr();
         let flv_copy = event_producer.clone();
+        let subscribe_token = subscribe_token.clone();
         async move {
             Ok::<_, GenericError>(service_fn(move |req| {
-                handle_connection(req, flv_copy.clone(), remote_addr, need_record)
+                handle_connection(req, flv_copy.clone(), remote_addr, need_record, subscribe_token.clone())
             }))
         }
     });

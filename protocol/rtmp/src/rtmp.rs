@@ -9,16 +9,18 @@ pub struct RtmpServer {
     address: String,
     event_producer: StreamHubEventSender,
     gop_num: usize,
-    token: Option<String>,
+    publish_token: Option<String>,
+    subscribe_token: Option<String>,
 }
 
 impl RtmpServer {
-    pub fn new(address: String, event_producer: StreamHubEventSender, gop_num: usize, token: Option<String>) -> Self {
+    pub fn new(address: String, event_producer: StreamHubEventSender, gop_num: usize, publish_token: Option<String>, subscribe_token: Option<String>) -> Self {
         Self {
             address,
             event_producer,
             gop_num,
-            token,
+            publish_token,
+            subscribe_token,
         }
     }
 
@@ -35,7 +37,8 @@ impl RtmpServer {
                 tcp_stream,
                 self.event_producer.clone(),
                 self.gop_num,
-                self.token.clone()
+                self.publish_token.clone(),
+                self.subscribe_token.clone(),
             );
             tokio::spawn(async move {
                 if let Err(err) = session.run().await {

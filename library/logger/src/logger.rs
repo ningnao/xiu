@@ -1,3 +1,6 @@
+use std::io::Write;
+use env_logger::fmt::Formatter;
+use log::Record;
 use {
     super::target::FileTarget,
     anyhow::Result,
@@ -138,9 +141,23 @@ pub struct Logger {
 
 impl Logger {
     pub fn new(level: &String, rotate: Option<Rotate>, path: Option<String>) -> Result<Logger> {
+        let log_format = |buf: &mut Formatter, record: &Record| {
+            let timestamp: DateTime<Local> = Local::now();
+            writeln!(
+                buf,
+                "[{} {} {}] {}",
+                timestamp.format("%Y-%m-%d %H:%M:%S"),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        };
+
         if rotate.is_none() || path.is_none() {
             env::set_var("RUST_LOG", level);
-            env_logger::init();
+            env_logger::builder()
+                .format(log_format)
+                .init();
             return Ok(Self {
                 ..Default::default()
             });
@@ -166,6 +183,7 @@ impl Logger {
         gen_log_file_thread_run(handler, rotate_val, path_val, receiver);
 
         Builder::from_env(env)
+            .format(log_format)
             .target(Target::Pipe(Box::new(target)))
             .init();
 

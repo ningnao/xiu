@@ -45,7 +45,7 @@ fn get_log_file_name(rotate: Rotate) -> String {
     match rotate {
         Rotate::Day => {
             format!(
-                "{}{:02}{:02}0000",
+                "{}-{:02}-{:02}",
                 local_time.year(),
                 local_time.month(),
                 local_time.day(),
@@ -53,7 +53,7 @@ fn get_log_file_name(rotate: Rotate) -> String {
         }
         Rotate::Hour => {
             format!(
-                "{}{:02}{:02}{:02}00",
+                "{}-{:02}-{:02}-{:02}",
                 local_time.year(),
                 local_time.month(),
                 local_time.day(),
@@ -62,7 +62,7 @@ fn get_log_file_name(rotate: Rotate) -> String {
         }
         Rotate::Minute => {
             format!(
-                "{}{:02}{:02}{:02}{:02}",
+                "{}-{:02}-{:02}-{:02}-{:02}",
                 local_time.year(),
                 local_time.month(),
                 local_time.day(),

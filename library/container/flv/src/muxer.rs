@@ -48,11 +48,13 @@ impl FlvMuxer {
         timestamp: u32,
     ) -> Result<(), FlvMuxerError> {
         //save timestamp
-        if self.first_flag && timestamp > 0 {
-            self.timestamp_start = timestamp;
-            self.first_flag = false;
+        if timestamp > 0 {
+            if self.first_flag {
+                self.timestamp_start = timestamp;
+                self.first_flag = false;
+            }
+            self.timestamp_delta = timestamp - self.timestamp_start;
         }
-        self.timestamp_delta = timestamp - self.timestamp_start;
         //tag type
         self.writer.write_u8(tag_type)?;
         //data size

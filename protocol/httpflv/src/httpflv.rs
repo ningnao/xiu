@@ -43,6 +43,7 @@ pub struct HttpFlv {
     need_record: bool,
     file_handler: Option<File>,
     subscribe_token: Option<String>,
+    first_video_metadata: bool,
 }
 
 impl HttpFlv {
@@ -73,6 +74,7 @@ impl HttpFlv {
             need_record,
             file_handler: None,
             subscribe_token,
+            first_video_metadata: true,
         }
     }
 
@@ -174,6 +176,15 @@ impl HttpFlv {
                 (BytesMut::new(), 0, 0)
             }
         };
+
+        // only record first video metadata
+        if common_timestamp == 0 && tag_type == tag_type::VIDEO {
+            if self.first_video_metadata {
+                self.first_video_metadata = false;
+            } else {
+                return Ok(());
+            }
+        }
 
         let common_data_len = common_data.len() as u32;
 

@@ -17,7 +17,6 @@ pub struct FlvMuxer {
     first_flag: bool,
     timestamp_start: u32,
     pub timestamp_delta: u32,
-
 }
 
 impl Default for FlvMuxer {

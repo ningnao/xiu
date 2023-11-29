@@ -40,9 +40,9 @@ pub enum HttpFLvErrorValue {
     #[fail(display = "write file error:{}", _0)]
     IOError(std::io::Error),
 
-    #[fail(display = "no token.\n")]
+    #[fail(display = "no token")]
     NoToken,
-    #[fail(display = "forbidden.\n")]
+    #[fail(display = "forbidden")]
     Forbidden,
 }
 

@@ -57,7 +57,7 @@ impl MetaData {
             return false;
         }
 
-        log::info!("metadata: {:?}", values);
+        log::debug!("metadata: {:?}", values);
 
         let mut is_metadata = false;
 

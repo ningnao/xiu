@@ -37,6 +37,8 @@ pub enum HttpFLvErrorValue {
     MetadataError(MetadataError),
     #[fail(display = "tokio mpsc error")]
     MpscSendError(SendError),
+    #[fail(display = "receiver being dropped")]
+    ReceiverDroppedError(SendError),
     #[fail(display = "write file error:{}", _0)]
     IOError(std::io::Error),
 

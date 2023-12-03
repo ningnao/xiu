@@ -130,6 +130,10 @@ impl HttpFlv {
         loop {
             if let Some(data) = self.data_consumer.recv().await {
                 if let Err(err) = self.write_flv_tag(data) {
+                    if let HttpFLvErrorValue::ReceiverDroppedError(_) = err.value {
+                        log::info!("write_flv_tag: {}", err);
+                        break;
+                    }
                     log::error!("write_flv_tag err: {}", err);
                     retry_count += 1;
                 } else {
@@ -206,7 +210,17 @@ impl HttpFlv {
             file_handler.write_all(data.as_ref())?;
         }
 
-        self.http_response_data_producer.start_send(Ok(data))?;
+        if let Err(err) = self.http_response_data_producer.start_send(Ok(data)) {
+            return if err.is_disconnected() {
+                Err(HttpFLvError {
+                    value: HttpFLvErrorValue::ReceiverDroppedError(err)
+                })
+            } else {
+                Err(HttpFLvError {
+                    value: HttpFLvErrorValue::MpscSendError(err)
+                })
+            }
+        }
 
         Ok(())
     }

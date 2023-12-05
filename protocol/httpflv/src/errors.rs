@@ -53,6 +53,8 @@ pub enum HttpFLvErrorValue {
     NoToken,
     #[fail(display = "forbidden")]
     Forbidden,
+    #[fail(display = "file exist")]
+    FileExist,
 }
 
 impl From<SessionError> for HttpFLvError {

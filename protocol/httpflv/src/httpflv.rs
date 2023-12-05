@@ -1,6 +1,7 @@
 use std::fs;
 use std::fs::File;
 use std::io::Write;
+use std::path::Path;
 use chrono::Local;
 use hyper::{Body, Request};
 use tokio::sync::oneshot;
@@ -80,6 +81,8 @@ impl HttpFlv {
     }
 
     pub async fn run(&mut self) -> Result<(), HttpFLvError> {
+        self.subscribe_from_rtmp_channels().await?;
+
         let mut token = None;
         if self.need_record {
             let flv_folder = format!("./{}/{}/flv", &self.app_name, &self.stream_name);
@@ -111,10 +114,15 @@ impl HttpFlv {
             validate_token(&self.subscribe_token, &token)?;
 
             let file_path = format!("{}/{}", flv_folder, flv_name);
-            self.file_handler = Some(File::create(file_path).unwrap());
+            if Path::new(&file_path).exists() {
+                return Err(HttpFLvError {
+                    value: HttpFLvErrorValue::FileExist
+                })
+            }
+
+            self.file_handler = Some(File::create(&file_path).unwrap());
         }
 
-        self.subscribe_from_rtmp_channels().await?;
         self.send_media_stream().await?;
 
         Ok(())

@@ -119,7 +119,6 @@ impl Transmitter {
                     data = receiver.recv() => {
                         if let Some(val) = data {
                             match val {
-
                                 PacketData::Audio { timestamp, data } => {
                                     let data = PacketData::Audio {
                                         timestamp,
@@ -175,7 +174,6 @@ impl Transmitter {
                                 .await
                             {
                                 log::error!("receive_event_loop send_prior_data err: {}", err);
-                                break;
                             }
                             match sender {
                                 DataSender::Frame {

@@ -48,6 +48,7 @@ async fn handle_connection(
                 if let Err(err) = flv_hanlder.run().await {
                     log::error!("flv handler run error: {}", err);
                 }
+                let _ = flv_hanlder.unsubscribe_from_rtmp_channels().await;
             });
 
             let mut resp = Response::new(Body::wrap_stream(http_response_data_consumer));

@@ -51,6 +51,9 @@ impl FlvMuxer {
             if self.first_flag {
                 self.timestamp_start = timestamp;
                 self.first_flag = false;
+            } else if timestamp < self.timestamp_start {
+                self.timestamp_start = timestamp;
+                log::warn!("timestamp smaller than first timestamp");
             }
             self.timestamp_delta = timestamp - self.timestamp_start;
         }

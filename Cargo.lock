@@ -941,7 +941,7 @@ dependencies = [
  "chrono",
  "env_logger",
  "failure",
- "job_scheduler_ng",
+ "job_scheduler_ng 2.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "log",
 ]
 
@@ -1539,13 +1539,18 @@ checksum = "fad582f4b9e86b6caa621cabeb0963332d92eea04729ab12892c2533951e6440"
 [[package]]
 name = "job_scheduler_ng"
 version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10bbdf445513bbe53f4666218b7057d265c76fa0b30475e121a6bf05dbaacaae"
 dependencies = [
  "chrono",
  "cron",
  "uuid",
 ]
+
+[[package]]
+name = "job_scheduler_ng"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10bbdf445513bbe53f4666218b7057d265c76fa0b30475e121a6bf05dbaacaae"
+replace = "job_scheduler_ng 2.0.4"
 
 [[package]]
 name = "js-sys"

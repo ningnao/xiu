@@ -1,0 +1,21 @@
+[package]
+name = "job_scheduler_ng"
+version = "2.0.4"
+authors = ["Mathijs van Veluw <black.dex@gmail.com>"]
+description = "A simple cron-like job scheduling library for Rust (Updated since 2022)."
+documentation = "https://docs.rs/job_scheduler_ng/"
+repository = "https://github.com/BlackDex/job_scheduler"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+keywords = ["cron", "crontab", "scheduler", "job"]
+categories = ["date-and-time"]
+edition = "2021"
+rust-version = "1.56.1" # Examples need v1.58 to be able to run.
+
+[dependencies]
+cron = "0.12.0"
+chrono = { version = "~0.4.20", default-features = false, features = ["clock"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = ">=1.25.0", features = ["macros", "time", "rt-multi-thread"] }

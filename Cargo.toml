@@ -16,3 +16,6 @@ members = [
   "library/logger",
   "library/streamhub",
 ]
+
+[replace]
+"job_scheduler_ng:2.0.4" = { path = "replace/job_scheduler_ng" }

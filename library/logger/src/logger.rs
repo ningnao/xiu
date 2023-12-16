@@ -103,7 +103,7 @@ pub fn gen_log_file_thread_run(
         };
 
         sched.add(Job::new(scheduler_rule.parse().unwrap(), || {
-            let dt: DateTime<Local> = Local::now();
+            /*let dt: DateTime<Local> = Local::now();
 
             let cur_number = format!(
                 "{}-{:02}-{:02} {:02}:{:02}:00",
@@ -113,7 +113,7 @@ pub fn gen_log_file_thread_run(
                 dt.hour(),
                 dt.minute()
             );
-            println!("time number: {cur_number}");
+            println!("time number: {cur_number}");*/
 
             match gen_log_file(rotate.to_owned(), path.to_owned()) {
                 Ok(file) => {

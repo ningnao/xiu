@@ -59,6 +59,7 @@ impl Config {
         if httpflv_port > 0 {
             httpflv_config = Some(HttpFlvConfig {
                 enabled: true,
+                enabled_nonce: false,
                 port: httpflv_port,
                 need_record: false,
                 subscribe_token: None,
@@ -130,6 +131,7 @@ pub struct WebRTCConfig {
 #[derive(Debug, Deserialize, Clone)]
 pub struct HttpFlvConfig {
     pub enabled: bool,
+    pub enabled_nonce: bool,
     pub port: usize,
     //record or not
     pub need_record: bool,

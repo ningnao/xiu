@@ -44,6 +44,7 @@ pub struct HttpFlv {
     remote_addr: SocketAddr,
 
     req: Request<Body>,
+    enabled_nonce: bool,
     need_record: bool,
     file_handler: Option<File>,
     subscribe_token: Option<String>,
@@ -59,6 +60,7 @@ impl HttpFlv {
         http_response_data_producer: HttpResponseDataProducer,
         req: Request<Body>,
         remote_addr: SocketAddr,
+        enabled_nonce: bool,
         need_record: bool,
         subscribe_token: Option<String>,
         nonce_map: Arc<Mutex<HashMap<String, i64>>>,
@@ -77,6 +79,7 @@ impl HttpFlv {
             request_url: req.uri().to_string(),
             remote_addr,
             req,
+            enabled_nonce,
             need_record,
             file_handler: None,
             subscribe_token,
@@ -121,7 +124,9 @@ impl HttpFlv {
             }
             // validate token
             validate_token(&self.subscribe_token, &token)?;
-            validate_nonce(&self.nonce_map, &nonce).await?;
+            if self.enabled_nonce {
+                validate_nonce(&self.nonce_map, &nonce).await?;
+            }
 
             let file_path = format!("{}/{}", flv_folder, flv_name);
             if Path::new(&file_path).exists() {

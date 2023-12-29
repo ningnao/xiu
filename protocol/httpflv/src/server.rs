@@ -21,6 +21,7 @@ async fn handle_connection(
     req: Request<Body>,
     event_producer: StreamHubEventSender, // event_producer: ChannelEventProducer
     remote_addr: SocketAddr,
+    enabled_nonce: bool,
     need_record: bool,
     subscribe_token: Option<String>,
     nonce_map: Arc<Mutex<HashMap<String, i64>>>,
@@ -44,6 +45,7 @@ async fn handle_connection(
                 http_response_data_producer,
                 req,
                 remote_addr,
+                enabled_nonce,
                 need_record,
                 subscribe_token,
                 nonce_map,
@@ -70,7 +72,7 @@ async fn handle_connection(
     }
 }
 
-pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool, subscribe_token: Option<String>, nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Result<()> {
+pub async fn run(event_producer: StreamHubEventSender, port: usize, enabled_nonce: bool, need_record: bool, subscribe_token: Option<String>, nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
     let sock_addr = listen_address.parse().unwrap();
 
@@ -81,7 +83,7 @@ pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record:
         let nonce_map_clone = Arc::clone(&nonce_map);
         async move {
             Ok::<_, GenericError>(service_fn(move |req| {
-                handle_connection(req, flv_copy.clone(), remote_addr, need_record, subscribe_token.clone(), Arc::clone(&nonce_map_clone))
+                handle_connection(req, flv_copy.clone(), remote_addr, enabled_nonce, need_record, subscribe_token.clone(), Arc::clone(&nonce_map_clone))
             }))
         }
     });

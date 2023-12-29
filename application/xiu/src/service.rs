@@ -284,11 +284,12 @@ impl Service {
             let port = httpflv_cfg_value.port;
             let event_producer = stream_hub.get_hub_event_sender();
             let nonce_map = stream_hub.get_nonce_map();
+            let enabled_nonce = httpflv_cfg_value.enabled_nonce;
             let need_record = httpflv_cfg_value.need_record;
             let subscribe_token = httpflv_cfg_value.subscribe_token.clone();
 
             tokio::spawn(async move {
-                if let Err(err) = httpflv_server::run(event_producer, port, need_record, subscribe_token, nonce_map).await {
+                if let Err(err) = httpflv_server::run(event_producer, port, enabled_nonce, need_record, subscribe_token, nonce_map).await {
                     log::error!("httpflv server error: {}", err);
                 }
             });

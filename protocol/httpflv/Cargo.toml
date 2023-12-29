@@ -22,7 +22,7 @@ chrono = "0.4"
 streamhub = { path = "../../library/streamhub/" }
 xflv = { path = "../../library/container/flv/" }
 rtmp = { path = "../rtmp/" }
-uuid = { version = "1.6.1", features = ["v4"] }                      #"0.0.4"
+uuid = { version = "1", features = ["v4", "fast-rng"] }                      #"0.0.4"
 
 [dependencies.tokio]
 version = "1.4.0"

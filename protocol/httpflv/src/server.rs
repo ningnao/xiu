@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use {
     super::httpflv::HttpFlv,
     futures::channel::mpsc::unbounded,
@@ -20,6 +23,7 @@ async fn handle_connection(
     remote_addr: SocketAddr,
     need_record: bool,
     subscribe_token: Option<String>,
+    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 ) -> Result<Response<Body>> {
     let path = req.uri().path();
 
@@ -42,6 +46,7 @@ async fn handle_connection(
                 remote_addr,
                 need_record,
                 subscribe_token,
+                nonce_map,
             );
 
             tokio::spawn(async move {
@@ -65,7 +70,7 @@ async fn handle_connection(
     }
 }
 
-pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool, subscribe_token: Option<String>) -> Result<()> {
+pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record: bool, subscribe_token: Option<String>, nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
     let sock_addr = listen_address.parse().unwrap();
 
@@ -73,9 +78,10 @@ pub async fn run(event_producer: StreamHubEventSender, port: usize, need_record:
         let remote_addr = socket.remote_addr();
         let flv_copy = event_producer.clone();
         let subscribe_token = subscribe_token.clone();
+        let nonce_map_clone = Arc::clone(&nonce_map);
         async move {
             Ok::<_, GenericError>(service_fn(move |req| {
-                handle_connection(req, flv_copy.clone(), remote_addr, need_record, subscribe_token.clone())
+                handle_connection(req, flv_copy.clone(), remote_addr, need_record, subscribe_token.clone(), Arc::clone(&nonce_map_clone))
             }))
         }
     });

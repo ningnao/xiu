@@ -33,6 +33,8 @@ xrtsp = { path = "../../protocol/rtsp/" }
 xwebrtc = { path = "../../protocol/webrtc/" }
 httpflv = { path = "../../protocol/httpflv/" }
 hls = { path = "../../protocol/hls/" }
+uuid = { version = "1.6.1", features = ["v4"] }
+chrono = "0.4"
 
 [features]
 default = ["std"]

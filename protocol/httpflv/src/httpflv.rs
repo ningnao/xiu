@@ -1,10 +1,12 @@
+use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::sync::Arc;
 use chrono::Local;
 use hyper::{Body, Request};
-use tokio::sync::oneshot;
+use tokio::sync::{Mutex, oneshot};
 use {
     super::{
         define::{tag_type, HttpResponseDataProducer},
@@ -46,6 +48,7 @@ pub struct HttpFlv {
     file_handler: Option<File>,
     subscribe_token: Option<String>,
     first_video_metadata: bool,
+    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 impl HttpFlv {
@@ -58,6 +61,7 @@ impl HttpFlv {
         remote_addr: SocketAddr,
         need_record: bool,
         subscribe_token: Option<String>,
+        nonce_map: Arc<Mutex<HashMap<String, i64>>>,
     ) -> Self {
         let (_, data_consumer) = mpsc::unbounded_channel();
         let subscriber_id = Uuid::new(RandomDigitCount::Four);
@@ -77,6 +81,7 @@ impl HttpFlv {
             file_handler: None,
             subscribe_token,
             first_video_metadata: true,
+            nonce_map,
         }
     }
 
@@ -84,6 +89,7 @@ impl HttpFlv {
         self.subscribe_from_rtmp_channels().await?;
 
         let mut token = None;
+        let mut nonce = None;
         if self.need_record {
             let flv_folder = format!("./{}/{}/flv", &self.app_name, &self.stream_name);
             fs::create_dir_all(&flv_folder).unwrap();
@@ -107,11 +113,15 @@ impl HttpFlv {
                         if entry[0].to_string() == "token".to_string() {
                             token = Some(entry[1].to_string());
                         }
+                        if entry[0].to_string() == "nonce".to_string() {
+                            nonce = Some(entry[1].to_string());
+                        }
                     }
                 }
             }
             // validate token
             validate_token(&self.subscribe_token, &token)?;
+            validate_nonce(&self.nonce_map, &nonce).await?;
 
             let file_path = format!("{}/{}", flv_folder, flv_name);
             if Path::new(&file_path).exists() {
@@ -309,6 +319,31 @@ fn validate_token(server_token: &Option<String>, token: &Option<String>) -> Resu
                     value: HttpFLvErrorValue::NoToken,
                 });
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn validate_nonce(nonce_map: &Arc<Mutex<HashMap<String, i64>>>, nonce: &Option<String>) -> Result<(), HttpFLvError> {
+    match nonce {
+        Some(nonce) => {
+            if let Some(timestamp) = nonce_map.lock().await.remove(nonce) {
+                if timestamp < Local::now().timestamp_millis() {
+                    return Err(HttpFLvError {
+                        value: HttpFLvErrorValue::InvalidNonce,
+                    });
+                }
+            } else {
+                return Err(HttpFLvError {
+                    value: HttpFLvErrorValue::Forbidden,
+                });
+            }
+        }
+        None => {
+            return Err(HttpFLvError {
+                value: HttpFLvErrorValue::Forbidden,
+            });
         }
     }
 

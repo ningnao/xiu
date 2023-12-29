@@ -1,3 +1,9 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use chrono::Local;
+use tokio::sync::Mutex;
+use tokio::time::interval;
 use rtmp::remuxer::RtmpRemuxer;
 
 use {
@@ -43,7 +49,31 @@ impl Service {
             None
         };
 
-        let mut stream_hub = StreamsHub::new(notifier);
+        let nonce_map = Arc::new(Mutex::new(HashMap::<String, i64>::new()));
+
+        // remove expire nonce thread
+        let nonce_map_clone = Arc::clone(&nonce_map);
+        tokio::spawn(async move {
+            let mut interval = interval(Duration::from_secs(15 * 60));
+            loop {
+                interval.tick().await;
+                let now_timestamp = Local::now().timestamp_millis();
+                let mut need_remove_nonce = Vec::new();
+
+                for (nonce, timestamp) in nonce_map_clone.lock().await.iter() {
+                    if timestamp < &now_timestamp {
+                        need_remove_nonce.push(nonce.clone());
+                    }
+                }
+
+                for nonce in need_remove_nonce {
+                    log::info!("remove expire nonce: {}", nonce);
+                    nonce_map_clone.lock().await.remove(&nonce);
+                }
+            }
+        });
+
+        let mut stream_hub = StreamsHub::new(notifier, nonce_map);
 
         self.start_httpflv(&mut stream_hub).await?;
         self.start_hls(&mut stream_hub).await?;
@@ -69,8 +99,10 @@ impl Service {
             8000
         };
 
+        let nonce_map = stream_hub.get_nonce_map();
+
         tokio::spawn(async move {
-            api::run(producer, http_api_port).await;
+            api::run(producer, http_api_port, nonce_map).await;
         });
         Ok(())
     }
@@ -251,11 +283,12 @@ impl Service {
             }
             let port = httpflv_cfg_value.port;
             let event_producer = stream_hub.get_hub_event_sender();
+            let nonce_map = stream_hub.get_nonce_map();
             let need_record = httpflv_cfg_value.need_record;
             let subscribe_token = httpflv_cfg_value.subscribe_token.clone();
 
             tokio::spawn(async move {
-                if let Err(err) = httpflv_server::run(event_producer, port, need_record, subscribe_token).await {
+                if let Err(err) = httpflv_server::run(event_producer, port, need_record, subscribe_token, nonce_map).await {
                     log::error!("httpflv server error: {}", err);
                 }
             });

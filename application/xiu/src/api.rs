@@ -1,3 +1,7 @@
+use std::collections::HashMap;
+use axum::extract::Path;
+use chrono::Local;
+use tokio::sync::Mutex;
 use {
     anyhow::Result,
     axum::{
@@ -83,9 +87,26 @@ impl ApiService {
 
         Ok(String::from("ok"))
     }
+
+    async fn gen_nonce(&self, nonce_map: &Arc<Mutex<HashMap<String, i64>>>) -> String {
+        let nonce = uuid::Uuid::new_v4().to_string();
+        nonce_map.lock().await.insert(nonce.clone(), Local::now().timestamp_millis() + (10 * 60 * 1000));
+        nonce
+    }
+
+    async fn validate_nonce(&self, nonce_map: &Arc<Mutex<HashMap<String, i64>>>, nonce: &str) -> String {
+        return if let Some(timestamp) = nonce_map.lock().await.remove(nonce) {
+            if timestamp < Local::now().timestamp_millis() {
+                return String::from("invalid");
+            }
+            String::from("success")
+        } else {
+            String::from("failed")
+        }
+    }
 }
 
-pub async fn run(producer: StreamHubEventSender, port: usize) {
+pub async fn run(producer: StreamHubEventSender, port: usize, nonce_map: Arc<Mutex<HashMap<String, i64>>>) {
     let api = Arc::new(ApiService {
         channel_event_producer: producer,
     });
@@ -109,10 +130,20 @@ pub async fn run(producer: StreamHubEventSender, port: usize) {
         }
     };
 
+    let gen_nonce_api = api.clone();
+    let nonce_map_clone = Arc::clone(&nonce_map);
+    let gen_nonce = move || async move { gen_nonce_api.gen_nonce(&nonce_map_clone).await };
+
+    let validate_nonce_api = api.clone();
+    let nonce_map_clone = Arc::clone(&nonce_map);
+    let validate_nonce = move |nonce: Path<String>| async move { validate_nonce_api.validate_nonce(&nonce_map_clone, &nonce).await };
+
     let app = Router::new()
         .route("/", get(root))
         .route("/get_stream_status", get(status))
-        .route("/kick_off_client", post(kick));
+        .route("/kick_off_client", post(kick))
+        .route("/gen_nonce", post(gen_nonce))
+        .route("/validate_nonce/:nonce", post(validate_nonce));
 
     log::info!("Http api server listening on http://0.0.0.0:{}", port);
     axum::Server::bind(&([0, 0, 0, 0], port as u16).into())

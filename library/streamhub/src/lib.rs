@@ -275,10 +275,12 @@ pub struct StreamsHub {
     hls_enabled: bool,
     //http notifier on sub/pub event
     notifier: Option<Notifier>,
+    //nonce map
+    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 impl StreamsHub {
-    pub fn new(notifier: Option<Notifier>) -> Self {
+    pub fn new(notifier: Option<Notifier>, nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Self {
         let (event_producer, event_consumer) = mpsc::unbounded_channel();
         let (client_producer, _) = broadcast::channel(100);
 
@@ -293,6 +295,7 @@ impl StreamsHub {
             rtmp_remuxer_enabled: false,
             hls_enabled: false,
             notifier,
+            nonce_map,
         }
     }
     pub async fn run(&mut self) {
@@ -321,6 +324,10 @@ impl StreamsHub {
 
     pub fn get_client_event_consumer(&mut self) -> BroadcastEventReceiver {
         self.client_event_producer.subscribe()
+    }
+
+    pub fn get_nonce_map(&mut self) -> Arc<Mutex<HashMap<String, i64>>> {
+        Arc::clone(&self.nonce_map)
     }
 
     pub async fn event_loop(&mut self) {

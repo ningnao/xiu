@@ -55,6 +55,8 @@ pub enum HttpFLvErrorValue {
     Forbidden,
     #[fail(display = "file exist")]
     FileExist,
+    #[fail(display = "invalid nonce")]
+    InvalidNonce,
 }
 
 impl From<SessionError> for HttpFLvError {

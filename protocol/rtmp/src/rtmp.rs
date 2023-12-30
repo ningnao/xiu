@@ -1,26 +1,38 @@
+use std::collections::HashMap;
 use streamhub::define::StreamHubEventSender;
 
 use super::session::server_session;
 use std::net::SocketAddr;
+use std::sync::Arc;
 use tokio::io::Error;
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 
 pub struct RtmpServer {
     address: String,
     event_producer: StreamHubEventSender,
     gop_num: usize,
+    enabled_nonce: bool,
     publish_token: Option<String>,
     subscribe_token: Option<String>,
+    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 impl RtmpServer {
-    pub fn new(address: String, event_producer: StreamHubEventSender, gop_num: usize, publish_token: Option<String>, subscribe_token: Option<String>) -> Self {
+    pub fn new(address: String, event_producer: StreamHubEventSender,
+               gop_num: usize,
+               publish_token: Option<String>,
+               subscribe_token: Option<String>,
+               enabled_nonce: bool,
+               nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Self {
         Self {
             address,
             event_producer,
             gop_num,
             publish_token,
             subscribe_token,
+            enabled_nonce,
+            nonce_map,
         }
     }
 
@@ -39,6 +51,8 @@ impl RtmpServer {
                 self.gop_num,
                 self.publish_token.clone(),
                 self.subscribe_token.clone(),
+                self.enabled_nonce,
+                Arc::clone(&self.nonce_map),
             );
             tokio::spawn(async move {
                 if let Err(err) = session.run().await {

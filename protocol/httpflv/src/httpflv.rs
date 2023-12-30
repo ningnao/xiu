@@ -124,6 +124,8 @@ impl HttpFlv {
             }
             // validate token
             validate_token(&self.subscribe_token, &token)?;
+
+            // validate nonce
             if self.enabled_nonce {
                 validate_nonce(&self.nonce_map, &nonce).await?;
             }

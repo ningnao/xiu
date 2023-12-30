@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use chrono::Local;
 use crate::chunk::{errors::UnpackErrorValue, packetizer::ChunkPacketizer};
 
 use {
@@ -66,10 +68,12 @@ pub struct ServerSession {
     gop_num: usize,
     publish_token: Option<String>,
     subscribe_token: Option<String>,
+    enabled_nonce: bool,
+    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 }
 
 impl ServerSession {
-    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender, gop_num: usize, publish_token: Option<String>, subscribe_token: Option<String>) -> Self {
+    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender, gop_num: usize, publish_token: Option<String>, subscribe_token: Option<String>, enabled_nonce: bool, nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Self {
         let remote_addr = if let Ok(addr) = stream.peer_addr() {
             log::info!("server session: {}", addr.to_string());
             Some(addr)
@@ -101,6 +105,8 @@ impl ServerSession {
             gop_num,
             publish_token,
             subscribe_token,
+            enabled_nonce,
+            nonce_map,
         }
     }
 
@@ -649,8 +655,27 @@ impl ServerSession {
             self.url_parameters
         );
 
+        let mut token = None;
+        let mut nonce = None;
+        for param in self.url_parameters.split("&") {
+            let entry: Vec<_> = param.split("=").collect();
+            if entry.len() == 2 {
+                if entry[0].to_string() == "token".to_string() {
+                    token = Some(entry[1].to_string());
+                }
+                if entry[0].to_string() == "nonce".to_string() {
+                    nonce = Some(entry[1].to_string());
+                }
+            }
+        }
+
         // validate token
-        validate_token(&self.subscribe_token, &self.url_parameters)?;
+        validate_token(&self.subscribe_token, &token)?;
+
+        // validate nonce
+        if self.enabled_nonce {
+            validate_nonce(&self.nonce_map, &nonce).await?;
+        }
 
         /*Now it can update the request url*/
         self.common.request_url = self.get_request_url(raw_stream_name);
@@ -694,8 +719,18 @@ impl ServerSession {
             .set_raw_stream_name(raw_stream_name.clone())
             .parse_raw_stream_name();
 
+        let mut token = None;
+        for param in self.url_parameters.split("&") {
+            let entry: Vec<_> = param.split("=").collect();
+            if entry.len() == 2 {
+                if entry[0].to_string() == "token".to_string() {
+                    token = Some(entry[1].to_string());
+                }
+            }
+        }
+
         // validate token
-        validate_token(&self.publish_token, &self.url_parameters)?;
+        validate_token(&self.publish_token, &token)?;
 
         /*Now it can update the request url*/
         self.common.request_url = self.get_request_url(raw_stream_name);
@@ -749,17 +784,8 @@ impl ServerSession {
     }
 }
 
-fn validate_token(server_token: &Option<String>, params: &str) -> Result<(), SessionError>{
+fn validate_token(server_token: &Option<String>, token: &Option<String>) -> Result<(), SessionError>{
     if let Some(server_token) = server_token {
-        let mut token = None;
-        for param in params.split("&") {
-            let entry: Vec<_> = param.split("=").collect();
-
-            if entry.len() == 2 && entry[0].to_string() == "token" {
-                token = Some(entry[1].to_string());
-            }
-        }
-
         match token {
             Some(token) => {
                 if token.as_str() != server_token {
@@ -773,6 +799,31 @@ fn validate_token(server_token: &Option<String>, params: &str) -> Result<(), Ses
                     value: SessionErrorValue::NoToken,
                 });
             }
+        }
+    }
+
+    Ok(())
+}
+
+async fn validate_nonce(nonce_map: &Arc<Mutex<HashMap<String, i64>>>, nonce: &Option<String>) -> Result<(), SessionError> {
+    match nonce {
+        Some(nonce) => {
+            if let Some(timestamp) = nonce_map.lock().await.remove(nonce) {
+                if timestamp < Local::now().timestamp_millis() {
+                    return Err(SessionError {
+                        value: SessionErrorValue::InvalidNonce,
+                    });
+                }
+            } else {
+                return Err(SessionError {
+                    value: SessionErrorValue::Forbidden,
+                });
+            }
+        }
+        None => {
+            return Err(SessionError {
+                value: SessionErrorValue::Forbidden,
+            });
         }
     }
 

@@ -179,8 +179,10 @@ impl Service {
             let address = format!("0.0.0.0:{listen_port}");
             let publish_token = rtmp_cfg_value.publish_token.clone();
             let subscribe_token = rtmp_cfg_value.subscribe_token.clone();
+            let enabled_nonce = rtmp_cfg_value.enabled_nonce;
+            let nonce_map = stream_hub.get_nonce_map();
 
-            let mut rtmp_server = RtmpServer::new(address, producer, gop_num, publish_token, subscribe_token);
+            let mut rtmp_server = RtmpServer::new(address, producer, gop_num, publish_token, subscribe_token, enabled_nonce, nonce_map);
             tokio::spawn(async move {
                 if let Err(err) = rtmp_server.run().await {
                     log::error!("rtmp server error: {}", err);

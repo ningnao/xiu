@@ -1,9 +1,9 @@
 [package]
-name = "env_logger_extend"
-version = "0.1.2"
+name = "commonlib"
+version = "0.1.0"
 authors = ["HarlanC <wawacry@qq.com>"]
 edition = "2018"
-description = "a logger library."
+description = "a common library for xiu project."
 license = "MIT"
 repository = "https://github.com/harlanc/xiu"
 
@@ -16,3 +16,7 @@ job_scheduler_ng = "2.0.4"
 chrono = "0.4"
 failure = "0.1.1"
 log = "0.4.0"
+indexmap = "1.9.3"
+md5 = "0.7.0"
+serde = { version = "1.0", features = ["derive", "rc"] }
+serde_derive = "1.0"

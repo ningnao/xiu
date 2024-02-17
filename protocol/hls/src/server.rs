@@ -1,19 +1,26 @@
 use {
-    hyper::{
-        service::{make_service_fn, service_fn},
-        Body, Request, Response, Server, StatusCode,
+    axum::{
+        body::Body,
+        extract::{Request, State},
+        handler::Handler,
+        http::StatusCode,
+        response::Response,
     },
-    tokio::fs::File,
+    commonlib::auth::Auth,
+    std::net::SocketAddr,
+    tokio::{fs::File, net::TcpListener},
     tokio_util::codec::{BytesCodec, FramedRead},
 };
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 type Result<T> = std::result::Result<T, GenericError>;
 static NOTFOUND: &[u8] = b"Not Found";
+static UNAUTHORIZED: &[u8] = b"Unauthorized";
 
-async fn handle_connection(req: Request<Body>) -> Result<Response<Body>> {
+async fn handle_connection(State(auth): State<Option<Auth>>, req: Request<Body>) -> Response<Body> {
     let path = req.uri().path();
 
+    let query_string: Option<String> = req.uri().query().map(|s| s.to_string());
     let mut file_path: String = String::from("");
 
     if path.ends_with(".m3u8") {
@@ -26,6 +33,18 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>> {
 
             let app_name = String::from(rv[1]);
             let stream_name = String::from(rv[2]);
+
+            if let Some(auth_val) = auth {
+                if auth_val
+                    .authenticate(&stream_name, &query_string, true)
+                    .is_err()
+                {
+                    return Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(UNAUTHORIZED.into())
+                        .unwrap();
+                }
+            }
 
             file_path = format!("./{app_name}/{stream_name}/{stream_name}.m3u8");
         }
@@ -45,7 +64,6 @@ async fn handle_connection(req: Request<Body>) -> Result<Response<Body>> {
             file_path = format!("./{app_name}/{stream_name}/{ts_name}.ts");
         }
     }
-
     simple_file_send(file_path.as_str()).await
 }
 
@@ -57,28 +75,29 @@ fn not_found() -> Response<Body> {
         .unwrap()
 }
 
-async fn simple_file_send(filename: &str) -> Result<Response<Body>> {
+async fn simple_file_send(filename: &str) -> Response<Body> {
     // Serve a file by asynchronously reading it by chunks using tokio-util crate.
 
     if let Ok(file) = File::open(filename).await {
         let stream = FramedRead::new(file, BytesCodec::new());
-        let body = Body::wrap_stream(stream);
-        return Ok(Response::new(body));
+        let body = Body::from_stream(stream);
+        return Response::new(body);
     }
 
-    Ok(not_found())
+    not_found()
 }
 
-pub async fn run(port: usize) -> Result<()> {
+pub async fn run(port: usize, auth: Option<Auth>) -> Result<()> {
     let listen_address = format!("0.0.0.0:{port}");
-    let sock_addr = listen_address.parse().unwrap();
+    let sock_addr: SocketAddr = listen_address.parse().unwrap();
 
-    let new_service =
-        make_service_fn(move |_| async { Ok::<_, GenericError>(service_fn(handle_connection)) });
+    let listener = TcpListener::bind(sock_addr).await?;
 
-    let server = Server::bind(&sock_addr).serve(new_service);
     log::info!("Hls server listening on http://{}", sock_addr);
-    server.await?;
+
+    let handle_connection = handle_connection.with_state(auth);
+
+    axum::serve(listener, handle_connection.into_make_service()).await?;
 
     Ok(())
 }

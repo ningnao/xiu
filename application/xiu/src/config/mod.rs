@@ -1,5 +1,6 @@
 pub mod errors;
 
+use commonlib::auth::AuthAlgorithm;
 use errors::ConfigError;
 use serde_derive::Deserialize;
 use std::fs;
@@ -14,6 +15,7 @@ pub struct Config {
     pub hls: Option<HlsConfig>,
     pub httpapi: Option<HttpApiConfig>,
     pub httpnotify: Option<HttpNotifierConfig>,
+    pub authsecret: AuthSecretConfig,
     pub log: Option<LogConfig>,
 }
 
@@ -35,6 +37,7 @@ impl Config {
                 port: rtmp_port,
                 pull: None,
                 push: None,
+                auth: None,
                 publish_token: None,
                 subscribe_token: None,
             });
@@ -45,6 +48,7 @@ impl Config {
             rtsp_config = Some(RtspConfig {
                 enabled: true,
                 port: rtsp_port,
+                auth: None,
             });
         }
 
@@ -53,6 +57,7 @@ impl Config {
             webrtc_config = Some(WebRTCConfig {
                 enabled: true,
                 port: webrtc_port,
+                auth: None,
             });
         }
 
@@ -62,6 +67,7 @@ impl Config {
                 enabled: true,
                 enabled_nonce: false,
                 port: httpflv_port,
+                auth: None,
                 need_record: false,
                 subscribe_token: None,
             });
@@ -73,6 +79,7 @@ impl Config {
                 enabled: true,
                 port: hls_port,
                 need_record: false,
+                auth: None,
             });
         }
 
@@ -89,6 +96,7 @@ impl Config {
             hls: hls_config,
             httpapi: None,
             httpnotify: None,
+            authsecret: AuthSecretConfig::default(),
             log: log_config,
         }
     }
@@ -102,6 +110,7 @@ pub struct RtmpConfig {
     pub gop_num: Option<usize>,
     pub pull: Option<RtmpPullConfig>,
     pub push: Option<Vec<RtmpPushConfig>>,
+    pub auth: Option<AuthConfig>,
     pub publish_token: Option<String>,
     pub subscribe_token: Option<String>,
 }
@@ -122,12 +131,14 @@ pub struct RtmpPushConfig {
 pub struct RtspConfig {
     pub enabled: bool,
     pub port: usize,
+    pub auth: Option<AuthConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct WebRTCConfig {
     pub enabled: bool,
     pub port: usize,
+    pub auth: Option<AuthConfig>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -135,6 +146,7 @@ pub struct HttpFlvConfig {
     pub enabled: bool,
     pub enabled_nonce: bool,
     pub port: usize,
+    pub auth: Option<AuthConfig>,
     //record or not
     pub need_record: bool,
     pub subscribe_token: Option<String>,
@@ -146,6 +158,7 @@ pub struct HlsConfig {
     pub port: usize,
     //record or not
     pub need_record: bool,
+    pub auth: Option<AuthConfig>,
 }
 
 pub enum LogLevel {
@@ -183,6 +196,19 @@ pub struct HttpNotifierConfig {
     pub on_stop: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct AuthSecretConfig {
+    pub key: String,
+    pub password: String,
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct AuthConfig {
+    pub pull_enabled: bool,
+    pub push_enabled: Option<bool>,
+    pub algorithm: AuthAlgorithm,
+}
+
 pub fn load(cfg_path: &String) -> Result<Config, ConfigError> {
     let content = fs::read_to_string(cfg_path)?;
     let decoded_config = toml::from_str(&content[..]).unwrap();
@@ -197,15 +223,13 @@ fn test_toml_parse() {
         Err(err) => println!("{}", err),
     }
 
-    let str = fs::read_to_string(
-        "./src/config/config.toml",
-    );
+    let str = fs::read_to_string("./src/config/config.toml");
 
     match str {
         Ok(val) => {
             println!("++++++{val}\n");
             let decoded: Config = toml::from_str(&val[..]).unwrap();
-
+            println!("whole config: {:?}", decoded);
             let rtmp = decoded.httpnotify;
 
             if let Some(val) = rtmp {

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use streamhub::define::StreamHubEventSender;
 
 use super::session::server_session;
+use commonlib::auth::Auth;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::Error;
@@ -12,6 +13,7 @@ pub struct RtmpServer {
     address: String,
     event_producer: StreamHubEventSender,
     gop_num: usize,
+    auth: Option<Auth>,
     enabled_nonce: bool,
     publish_token: Option<String>,
     subscribe_token: Option<String>,
@@ -19,16 +21,21 @@ pub struct RtmpServer {
 }
 
 impl RtmpServer {
-    pub fn new(address: String, event_producer: StreamHubEventSender,
-               gop_num: usize,
-               publish_token: Option<String>,
-               subscribe_token: Option<String>,
-               enabled_nonce: bool,
-               nonce_map: Arc<Mutex<HashMap<String, i64>>>) -> Self {
+    pub fn new(
+        address: String,
+        event_producer: StreamHubEventSender,
+        gop_num: usize,
+        auth: Option<Auth>,
+        publish_token: Option<String>,
+        subscribe_token: Option<String>,
+        enabled_nonce: bool,
+        nonce_map: Arc<Mutex<HashMap<String, i64>>>
+    ) -> Self {
         Self {
             address,
             event_producer,
             gop_num,
+            auth,
             publish_token,
             subscribe_token,
             enabled_nonce,
@@ -49,6 +56,7 @@ impl RtmpServer {
                 tcp_stream,
                 self.event_producer.clone(),
                 self.gop_num,
+                self.auth.clone(),
                 self.publish_token.clone(),
                 self.subscribe_token.clone(),
                 self.enabled_nonce,

@@ -19,4 +19,12 @@ A httpflv library.
 - Do some refactoring.
 ## 0.3.2
 - Reference streamhub new version v0.1.2.
+## 0.3.3
+- Replace hyper HTTP library with axum.
+- Fix bug: when http connection is disconnected , don't need to retry.
+- Receive and process sub event result.
+## 0.4.0
+- Support auth.
+## 0.4.1
+- Fix RTMP build error.
 

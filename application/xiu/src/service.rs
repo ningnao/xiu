@@ -1,3 +1,4 @@
+use commonlib::auth::AuthType;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -6,11 +7,14 @@ use tokio::sync::Mutex;
 use tokio::time::interval;
 use rtmp::remuxer::RtmpRemuxer;
 
+use crate::config::{AuthConfig, AuthSecretConfig};
+
 use {
     super::api,
     super::config::Config,
     //https://rustcc.cn/article?id=6dcbf032-0483-4980-8bfe-c64a7dfb33c7
     anyhow::Result,
+    commonlib::auth::Auth,
     hls::remuxer::HlsRemuxer,
     hls::server as hls_server,
     httpflv::server as httpflv_server,
@@ -31,6 +35,35 @@ pub struct Service {
 impl Service {
     pub fn new(cfg: Config) -> Self {
         Service { cfg }
+    }
+
+    fn gen_auth(auth_config: &Option<AuthConfig>, authsecret: &AuthSecretConfig) -> Option<Auth> {
+        if let Some(cfg) = auth_config {
+            let auth_type = if let Some(push_enabled) = cfg.push_enabled {
+                if push_enabled && cfg.pull_enabled {
+                    AuthType::Both
+                } else if !push_enabled && !cfg.pull_enabled {
+                    AuthType::None
+                } else if push_enabled && !cfg.pull_enabled {
+                    AuthType::Push
+                } else {
+                    AuthType::Pull
+                }
+            } else {
+                match cfg.pull_enabled {
+                    true => AuthType::Pull,
+                    false => AuthType::None,
+                }
+            };
+            Some(Auth::new(
+                authsecret.key.clone(),
+                authsecret.password.clone(),
+                cfg.algorithm.clone(),
+                auth_type,
+            ))
+        } else {
+            None
+        }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -182,7 +215,8 @@ impl Service {
             let enabled_nonce = rtmp_cfg_value.enabled_nonce;
             let nonce_map = stream_hub.get_nonce_map();
 
-            let mut rtmp_server = RtmpServer::new(address, producer, gop_num, publish_token, subscribe_token, enabled_nonce, nonce_map);
+            let auth = Self::gen_auth(&rtmp_cfg_value.auth, &self.cfg.authsecret);
+            let mut rtmp_server = RtmpServer::new(address, producer, gop_num, auth, publish_token, subscribe_token, enabled_nonce, nonce_map);
             tokio::spawn(async move {
                 if let Err(err) = rtmp_server.run().await {
                     log::error!("rtmp server error: {}", err);
@@ -194,14 +228,22 @@ impl Service {
     }
 
     async fn start_rtmp_remuxer(&mut self, stream_hub: &mut StreamsHub) -> Result<()> {
-        //The remuxer now is used for rtsp2rtmp, so both rtsp/rtmp cfg need to be enabled.
+        //The remuxer now is used for rtsp2rtmp/whip2rtmp, so both rtsp(or whip)/rtmp cfg need to be enabled.
         let mut rtsp_enabled = false;
         if let Some(rtsp_cfg_value) = &self.cfg.rtsp {
             if rtsp_cfg_value.enabled {
                 rtsp_enabled = true;
             }
         }
-        if !rtsp_enabled {
+
+        let mut whip_enabled = false;
+        if let Some(whip_cfg_value) = &self.cfg.webrtc {
+            if whip_cfg_value.enabled {
+                whip_enabled = true;
+            }
+        }
+
+        if !rtsp_enabled && !whip_enabled {
             return Ok(());
         }
 
@@ -241,7 +283,8 @@ impl Service {
             let listen_port = rtsp_cfg_value.port;
             let address = format!("0.0.0.0:{listen_port}");
 
-            let mut rtsp_server = RtspServer::new(address, producer);
+            let auth = Self::gen_auth(&rtsp_cfg_value.auth, &self.cfg.authsecret);
+            let mut rtsp_server = RtspServer::new(address, producer, auth);
             tokio::spawn(async move {
                 if let Err(err) = rtsp_server.run().await {
                     log::error!("rtsp server error: {}", err);
@@ -265,7 +308,8 @@ impl Service {
             let listen_port = webrtc_cfg_value.port;
             let address = format!("0.0.0.0:{listen_port}");
 
-            let mut webrtc_server = WebRTCServer::new(address, producer);
+            let auth = Self::gen_auth(&webrtc_cfg_value.auth, &self.cfg.authsecret);
+            let mut webrtc_server = WebRTCServer::new(address, producer, auth);
             tokio::spawn(async move {
                 if let Err(err) = webrtc_server.run().await {
                     log::error!("webrtc server error: {}", err);
@@ -290,8 +334,9 @@ impl Service {
             let need_record = httpflv_cfg_value.need_record;
             let subscribe_token = httpflv_cfg_value.subscribe_token.clone();
 
+            let auth = Self::gen_auth(&httpflv_cfg_value.auth, &self.cfg.authsecret);
             tokio::spawn(async move {
-                if let Err(err) = httpflv_server::run(event_producer, port, enabled_nonce, need_record, subscribe_token, nonce_map).await {
+                if let Err(err) = httpflv_server::run(event_producer, port, auth, enabled_nonce, need_record, subscribe_token, nonce_map).await {
                     log::error!("httpflv server error: {}", err);
                 }
             });
@@ -323,9 +368,9 @@ impl Service {
             });
 
             let port = hls_cfg_value.port;
-
+            let auth = Self::gen_auth(&hls_cfg_value.auth, &self.cfg.authsecret);
             tokio::spawn(async move {
-                if let Err(err) = hls_server::run(port).await {
+                if let Err(err) = hls_server::run(port, auth).await {
                     log::error!("hls server error: {}", err);
                 }
             });

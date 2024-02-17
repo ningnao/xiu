@@ -18,9 +18,13 @@ use std::io::Read;
 use std::{collections::HashMap, fs::File, sync::Arc};
 use tokio::net::TcpStream;
 
-use super::http::define::http_method_name;
-use super::http::parse_content_length;
-use super::http::{HttpRequest, HttpResponse, Marshal, Unmarshal};
+use commonlib::define::http_method_name;
+use commonlib::http::{parse_content_length, HttpRequest, HttpResponse};
+
+use commonlib::http::Marshal as HttpMarshal;
+use commonlib::http::Unmarshal as HttpUnmarshal;
+
+use commonlib::auth::Auth;
 
 use super::whep::handle_whep;
 use super::whip::handle_whip;
@@ -46,10 +50,16 @@ pub struct WebRTCServerSession {
     pub session_id: Option<Uuid>,
     pub http_request_data: Option<HttpRequest>,
     pub peer_connection: Option<Arc<RTCPeerConnection>>,
+
+    auth: Option<Auth>,
 }
 
 impl WebRTCServerSession {
-    pub fn new(stream: TcpStream, event_producer: StreamHubEventSender) -> Self {
+    pub fn new(
+        stream: TcpStream,
+        event_producer: StreamHubEventSender,
+        auth: Option<Auth>,
+    ) -> Self {
         let net_io: Box<dyn TNetIO + Send + Sync> = Box::new(TcpIO::new(stream));
         let io = Arc::new(Mutex::new(net_io));
 
@@ -58,10 +68,11 @@ impl WebRTCServerSession {
             reader: BytesReader::new(BytesMut::default()),
             writer: AsyncBytesWriter::new(io),
             event_sender: event_producer,
-            stream_handler: Arc::new(WebRTCStreamHandler::new()),
+            stream_handler: Arc::new(WebRTCStreamHandler::default()),
             session_id: None,
             http_request_data: None,
             peer_connection: None,
+            auth,
         }
     }
 
@@ -100,17 +111,20 @@ impl WebRTCServerSession {
 
         if let Some(http_request) = HttpRequest::unmarshal(std::str::from_utf8(&request_data)?) {
             //POST /whip?app=live&stream=test HTTP/1.1
-            let eles: Vec<&str> = http_request.path.splitn(2, '/').collect();
-            let pars_map = &http_request.path_parameters_map;
+            let eles: Vec<&str> = http_request.uri.path.splitn(2, '/').collect();
+            let pars_map = &http_request.query_pairs;
 
             let request_method = http_request.method.as_str();
             if request_method == http_method_name::GET {
-                let response = match http_request.path.as_str() {
+                let response = match http_request.uri.path.as_str() {
                     "/" => Self::gen_file_response("./index.html"),
                     "/whip.js" => Self::gen_file_response("./whip.js"),
                     "/whep.js" => Self::gen_file_response("./whep.js"),
                     _ => {
-                        log::warn!("the http get path: {} is not supported.", http_request.path);
+                        log::warn!(
+                            "the http get path: {} is not supported.",
+                            http_request.uri.path
+                        );
                         return Ok(());
                     }
                 };
@@ -122,7 +136,7 @@ impl WebRTCServerSession {
             if eles.len() < 2 || pars_map.get("app").is_none() || pars_map.get("stream").is_none() {
                 log::error!(
                     "WebRTCServerSession::run the http path is not correct: {}",
-                    http_request.path
+                    http_request.uri.path
                 );
 
                 return Err(SessionError {
@@ -149,25 +163,31 @@ impl WebRTCServerSession {
 
                     let path = format!(
                         "{}?{}&session_id={}",
-                        http_request.path,
-                        http_request.path_parameters.as_ref().unwrap(),
+                        http_request.uri.path,
+                        http_request.uri.query.as_ref().unwrap(),
                         self.session_id.unwrap()
                     );
                     let offer = RTCSessionDescription::offer(sdp_data.clone())?;
 
                     match t.to_lowercase().as_str() {
                         "whip" => {
+                            if let Some(auth) = &self.auth {
+                                auth.authenticate(&stream_name, &http_request.uri.query, false)?;
+                            }
                             self.publish_whip(app_name, stream_name, path, offer)
                                 .await?;
                         }
                         "whep" => {
+                            if let Some(auth) = &self.auth {
+                                auth.authenticate(&stream_name, &http_request.uri.query, true)?;
+                            }
                             self.subscribe_whep(app_name, stream_name, path, offer)
                                 .await?;
                         }
                         _ => {
                             log::error!(
                                 "current path: {}, method: {}",
-                                http_request.path,
+                                http_request.uri.path,
                                 t.to_lowercase()
                             );
                             return Err(SessionError {
@@ -176,7 +196,10 @@ impl WebRTCServerSession {
                         }
                     }
                 }
-                http_method_name::OPTIONS => {}
+                http_method_name::OPTIONS => {
+                    self.send_response(&Self::gen_response(http::StatusCode::OK))
+                        .await?
+                }
                 http_method_name::PATCH => {}
                 http_method_name::DELETE => {
                     if let Some(session_id) = pars_map.get("session_id") {
@@ -198,8 +221,8 @@ impl WebRTCServerSession {
                     } else {
                         log::error!(
                             "the delete path does not contain session id: {}?{}",
-                            http_request.path,
-                            http_request.path_parameters.as_ref().unwrap()
+                            http_request.uri.path,
+                            http_request.uri.query.as_ref().unwrap()
                         );
                     }
 
@@ -216,7 +239,7 @@ impl WebRTCServerSession {
                         _ => {
                             log::error!(
                                 "current path: {}, method: {}",
-                                http_request.path,
+                                http_request.uri.path,
                                 t.to_lowercase()
                             );
                             return Err(SessionError {
@@ -268,9 +291,9 @@ impl WebRTCServerSession {
             });
         }
 
-        let sender = event_result_receiver.await??.1.unwrap();
+        let sender = event_result_receiver.await??;
 
-        let response = match handle_whip(offer, sender).await {
+        let response = match handle_whip(offer, sender.0, sender.1).await {
             Ok((session_description, peer_connection)) => {
                 self.peer_connection = Some(peer_connection);
 
@@ -458,7 +481,7 @@ impl WebRTCServerSession {
         PublisherInfo {
             id,
             pub_type: PublishType::PushWebRTC,
-            pub_data_type: streamhub::define::PubDataType::Packet,
+            pub_data_type: streamhub::define::PubDataType::Both,
             notify_info: NotifyInfo {
                 request_url: String::from(""),
                 remote_addr: String::from(""),
@@ -473,12 +496,24 @@ impl WebRTCServerSession {
             "".to_string()
         };
 
-        HttpResponse {
+        let mut response = HttpResponse {
             version: "HTTP/1.1".to_string(),
             status_code: status_code.as_u16(),
             reason_phrase,
             ..Default::default()
-        }
+        };
+
+        response
+            .headers
+            .insert("Access-Control-Allow-Origin".to_owned(), "*".to_owned());
+        response.headers.insert(
+            "Access-Control-Allow-Headers".to_owned(),
+            "content-type".to_owned(),
+        );
+        response
+            .headers
+            .insert("Access-Control-Allow-Method".to_owned(), "POST".to_owned());
+        response
     }
 
     fn gen_file_response(file_path: &str) -> HttpResponse {
@@ -507,11 +542,17 @@ impl WebRTCServerSession {
 }
 
 #[derive(Default)]
-pub struct WebRTCStreamHandler {}
+pub struct WebRTCStreamHandler {
+    sps: Mutex<Vec<u8>>,
+    pps: Mutex<Vec<u8>>,
+}
 
 impl WebRTCStreamHandler {
-    pub fn new() -> Self {
-        Self {}
+    pub async fn set_sps(&self, sps: Vec<u8>) {
+        *self.sps.lock().await = sps;
+    }
+    pub async fn set_pps(&self, pps: Vec<u8>) {
+        *self.pps.lock().await = pps;
     }
 }
 
@@ -519,7 +560,7 @@ impl WebRTCStreamHandler {
 impl TStreamHandler for WebRTCStreamHandler {
     async fn send_prior_data(
         &self,
-        _sender: DataSender,
+        _data_sender: DataSender,
         _sub_type: SubscribeType,
     ) -> Result<(), ChannelError> {
         Ok(())

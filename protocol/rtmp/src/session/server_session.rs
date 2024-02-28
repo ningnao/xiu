@@ -3,11 +3,6 @@ use chrono::Local;
 use crate::chunk::{errors::UnpackErrorValue, packetizer::ChunkPacketizer};
 
 use {
-    bytes::BytesMut,
-    bytesio::{
-        bytes_writer::AsyncBytesWriter,
-        bytesio::{TcpIO, TNetIO},
-    },
     crate::{
         amf0::Amf0ValueType,
         chunk::{
@@ -682,14 +677,16 @@ impl ServerSession {
 
         let mut token = None;
         let mut nonce = None;
-        for param in self.url_parameters.split("&") {
-            let entry: Vec<_> = param.split("=").collect();
-            if entry.len() == 2 {
-                if entry[0].to_string() == "token".to_string() {
-                    token = Some(entry[1].to_string());
-                }
-                if entry[0].to_string() == "nonce".to_string() {
-                    nonce = Some(entry[1].to_string());
+        if let Some(query) = &self.query {
+            for param in query.split("&") {
+                let entry: Vec<_> = param.split("=").collect();
+                if entry.len() == 2 {
+                    if entry[0].to_string() == "token".to_string() {
+                        token = Some(entry[1].to_string());
+                    }
+                    if entry[0].to_string() == "nonce".to_string() {
+                        nonce = Some(entry[1].to_string());
+                    }
                 }
             }
         }
@@ -748,11 +745,13 @@ impl ServerSession {
         }
 
         let mut token = None;
-        for param in self.url_parameters.split("&") {
-            let entry: Vec<_> = param.split("=").collect();
-            if entry.len() == 2 {
-                if entry[0].to_string() == "token".to_string() {
-                    token = Some(entry[1].to_string());
+        if let Some(query) = &self.query {
+            for param in query.split("&") {
+                let entry: Vec<_> = param.split("=").collect();
+                if entry.len() == 2 {
+                    if entry[0].to_string() == "token".to_string() {
+                        token = Some(entry[1].to_string());
+                    }
                 }
             }
         }

@@ -5,7 +5,10 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::Arc;
 use chrono::Local;
-use hyper::{Body, Request};
+use axum::{
+    body::Body,
+    extract::Request,
+};
 use tokio::sync::{Mutex, oneshot};
 use {
     super::{

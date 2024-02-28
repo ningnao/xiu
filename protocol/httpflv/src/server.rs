@@ -23,13 +23,9 @@ static NOTFOUND: &[u8] = b"Not Found";
 static UNAUTHORIZED: &[u8] = b"Unauthorized";
 
 async fn handle_connection(
-    State((event_producer, auth)): State<(StreamHubEventSender, Option<Auth>)>, // event_producer: ChannelEventProducer
+    State((event_producer, auth, enabled_nonce, need_record, subscribe_token, nonce_map)): State<(StreamHubEventSender, Option<Auth>, bool, bool, Option<String>, Arc<Mutex<HashMap<String, i64>>>)>, // event_producer: ChannelEventProducer
     ConnectInfo(remote_addr): ConnectInfo<SocketAddr>,
     req: Request<Body>,
-    enabled_nonce: bool,
-    need_record: bool,
-    subscribe_token: Option<String>,
-    nonce_map: Arc<Mutex<HashMap<String, i64>>>,
 ) -> Response<Body> {
     let path = req.uri().path();
     let query_string: Option<String> = req.uri().query().map(|s| s.to_string());
@@ -108,7 +104,6 @@ pub async fn run(
 
     let subscribe_token = subscribe_token.clone();
     let nonce_map_clone = Arc::clone(&nonce_map);
-
     let handle_connection = handle_connection.with_state((event_producer.clone(), auth, enabled_nonce, need_record, subscribe_token.clone(), Arc::clone(&nonce_map_clone)));
 
     axum::serve(

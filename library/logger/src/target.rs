@@ -27,7 +27,6 @@ impl io::Write for FileTarget {
         }
     }
     fn flush(&mut self) -> io::Result<()> {
-        println!("flush");
         let mut file_handler = self.cur_file_handler.lock().unwrap();
         file_handler.flush()
     }

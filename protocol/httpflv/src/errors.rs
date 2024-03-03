@@ -5,7 +5,6 @@ use {
     tokio::sync::oneshot::error::RecvError, xflv::amf0::errors::Amf0WriteError,
     xflv::errors::FlvMuxerError,
 };
-use rtmp::amf0::Amf0WriteError;
 
 #[derive(Debug)]
 pub struct ServerError {

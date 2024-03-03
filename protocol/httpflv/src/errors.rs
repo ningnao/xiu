@@ -1,15 +1,11 @@
-use streamhub::errors::ChannelError;
+use streamhub::errors::StreamHubError;
 
 use {
-    failure::Fail,
-    futures::channel::mpsc::SendError,
-    rtmp::{
-        amf0::errors::Amf0WriteError, cache::errors::MetadataError, session::errors::SessionError,
-    },
-    std::fmt,
-    tokio::sync::oneshot::error::RecvError,
+    failure::Fail, futures::channel::mpsc::SendError, std::fmt,
+    tokio::sync::oneshot::error::RecvError, xflv::amf0::errors::Amf0WriteError,
     xflv::errors::FlvMuxerError,
 };
+use rtmp::amf0::Amf0WriteError;
 
 #[derive(Debug)]
 pub struct ServerError {
@@ -30,25 +26,23 @@ pub struct HttpFLvError {
 pub enum HttpFLvErrorValue {
     #[fail(display = "server error")]
     Error,
-    #[fail(display = "session error")]
-    SessionError(SessionError),
     #[fail(display = "flv muxer error")]
     MuxerError(FlvMuxerError),
     #[fail(display = "amf write error")]
     Amf0WriteError(Amf0WriteError),
     #[fail(display = "metadata error")]
-    MetadataError(MetadataError),
-    #[fail(display = "tokio mpsc error")]
     MpscSendError(SendError),
     #[fail(display = "event execute error: {}", _0)]
-    ChannelError(ChannelError),
+    ChannelError(StreamHubError),
     #[fail(display = "tokio: oneshot receiver err: {}", _0)]
     RecvError(#[cause] RecvError),
     #[fail(display = "channel recv error")]
     ChannelRecvError,
+    #[fail(display = "send frame data error")]
+    SendFrameDataErr,
+
     #[fail(display = "write file error:{}", _0)]
     IOError(std::io::Error),
-
     #[fail(display = "no token")]
     NoToken,
     #[fail(display = "forbidden")]
@@ -57,14 +51,6 @@ pub enum HttpFLvErrorValue {
     FileExist,
     #[fail(display = "invalid nonce")]
     InvalidNonce,
-}
-
-impl From<SessionError> for HttpFLvError {
-    fn from(error: SessionError) -> Self {
-        HttpFLvError {
-            value: HttpFLvErrorValue::SessionError(error),
-        }
-    }
 }
 
 impl From<FlvMuxerError> for HttpFLvError {
@@ -91,16 +77,8 @@ impl From<Amf0WriteError> for HttpFLvError {
     }
 }
 
-impl From<MetadataError> for HttpFLvError {
-    fn from(error: MetadataError) -> Self {
-        HttpFLvError {
-            value: HttpFLvErrorValue::MetadataError(error),
-        }
-    }
-}
-
-impl From<ChannelError> for HttpFLvError {
-    fn from(error: ChannelError) -> Self {
+impl From<StreamHubError> for HttpFLvError {
+    fn from(error: StreamHubError) -> Self {
         HttpFLvError {
             value: HttpFLvErrorValue::ChannelError(error),
         }

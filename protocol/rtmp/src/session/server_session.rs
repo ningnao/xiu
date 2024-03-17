@@ -25,10 +25,7 @@ use {
     commonlib::auth::Auth,
     indexmap::IndexMap,
     std::{sync::Arc, time::Duration},
-    streamhub::{
-        define::StreamHubEventSender,
-        utils::{RandomDigitCount, Uuid},
-    },
+    streamhub::define::StreamHubEventSender,
     super::{
         common::Common,
         define,
@@ -59,10 +56,6 @@ pub struct ServerSession {
     state: ServerSessionState,
     bytesio_data: BytesMut,
     has_remaing_data: bool,
-    /* Used to mark the subscriber's the data producer
-    in channels and delete it from map when unsubscribe
-    is called. */
-    pub session_id: Uuid,
     connect_properties: ConnectProperties,
     pub common: Common,
     /*configure how many gops will be cached.*/
@@ -109,7 +102,7 @@ impl ServerSession {
                 SessionType::Server,
                 remote_addr,
             ),
-            session_id: Uuid::new(RandomDigitCount::Four),
+
             bytesio_data: BytesMut::new(),
             has_remaing_data: false,
             connect_properties: ConnectProperties::default(),
@@ -183,11 +176,7 @@ impl ServerSession {
                 }
                 Err(err) => {
                     self.common
-                        .unpublish_to_channels(
-                            self.app_name.clone(),
-                            self.stream_name.clone(),
-                            self.session_id,
-                        )
+                        .unpublish_to_channels(self.app_name.clone(), self.stream_name.clone())
                         .await?;
 
                     return Err(SessionError {
@@ -219,11 +208,7 @@ impl ServerSession {
                 Err(err) => {
                     if let UnpackErrorValue::CannotParse = err.value {
                         self.common
-                            .unpublish_to_channels(
-                                self.app_name.clone(),
-                                self.stream_name.clone(),
-                                self.session_id,
-                            )
+                            .unpublish_to_channels(self.app_name.clone(), self.stream_name.clone())
                             .await?;
                         return Err(err)?;
                     }
@@ -239,11 +224,7 @@ impl ServerSession {
             Ok(_) => {}
             Err(err) => {
                 self.common
-                    .unsubscribe_from_channels(
-                        self.app_name.clone(),
-                        self.stream_name.clone(),
-                        self.session_id,
-                    )
+                    .unsubscribe_from_channels(self.app_name.clone(), self.stream_name.clone())
                     .await?;
                 return Err(err);
             }
@@ -516,11 +497,7 @@ impl ServerSession {
         stream_id: &f64,
     ) -> Result<(), SessionError> {
         self.common
-            .unpublish_to_channels(
-                self.app_name.clone(),
-                self.stream_name.clone(),
-                self.session_id,
-            )
+            .unpublish_to_channels(self.app_name.clone(), self.stream_name.clone())
             .await?;
 
         let mut netstream = NetStreamWriter::new(Arc::clone(&self.io));
@@ -702,11 +679,7 @@ impl ServerSession {
         /*Now it can update the request url*/
         self.common.request_url = self.get_request_url(raw_stream_name);
         self.common
-            .subscribe_from_channels(
-                self.app_name.clone(),
-                self.stream_name.clone(),
-                self.session_id,
-            )
+            .subscribe_from_channels(self.app_name.clone(), self.stream_name.clone())
             .await?;
 
         self.state = ServerSessionState::Play;
@@ -808,7 +781,6 @@ impl ServerSession {
             .publish_to_channels(
                 self.app_name.clone(),
                 self.stream_name.clone(),
-                self.session_id,
                 self.gop_num,
             )
             .await?;

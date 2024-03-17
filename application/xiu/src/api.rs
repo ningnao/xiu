@@ -54,9 +54,10 @@ impl ApiService {
     async fn root(&self) -> String {
         String::from(
             "Usage of xiu http api:
-                ./api/query_whole_streams(get) query whole streams' information or top streams' information.
-                ./api/query_stream(post) query stream information by identifier and uuid.
-                ./api/kick_off_client(post) kick off client by publish/subscribe id.\n",
+                ./query_whole_streams(get) query whole streams' information or top streams' information.
+                ./query_stream(post) query stream information by identifier and uuid.
+                ./kick_off_client(post) kick off client by publish/subscribe id.
+                ./gen_nonce(post) generation nonce for publish/subscribe client.\n",
         )
     }
 
@@ -176,10 +177,7 @@ pub async fn run(producer: StreamHubEventSender, port: usize, nonce_map: Arc<Mut
 
     let api_kick_off = api.clone();
     let kick_off = move |Json(id): Json<KickOffClient>| async move {
-        match api_kick_off.kick_off_client(id).await {
-            Ok(response) => response,
-            Err(_) => "error".to_owned(),
-        }
+        api_kick_off.kick_off_client(id).await.unwrap_or_else(|_| "error".to_owned())
     };
 
     let gen_nonce_api = api.clone();
@@ -188,9 +186,9 @@ pub async fn run(producer: StreamHubEventSender, port: usize, nonce_map: Arc<Mut
 
     let app = Router::new()
         .route("/", get(root))
-        .route("/api/query_whole_streams", get(query_streams))
-        .route("/api/query_stream", post(query_stream))
-        .route("/api/kick_off_client", post(kick_off))
+        .route("/query_whole_streams", get(query_streams))
+        .route("/query_stream", post(query_stream))
+        .route("/kick_off_client", post(kick_off))
         .route("/gen_nonce", post(gen_nonce));
 
     log::info!("Http api server listening on http://0.0.0.0:{}", port);
